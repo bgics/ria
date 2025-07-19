@@ -26,27 +26,22 @@ struct Cli {
 fn main() {
     let args = Cli::parse();
 
-    if args.file_path == "-" {
+    let reader: Box<dyn BufRead> = if args.file_path == "-" {
         let stdin = io::stdin();
-        let reader = stdin.lock();
-
-        search_lines(reader, args);
+        Box::new(stdin.lock())
     } else {
         let file = File::open(args.file_path.clone()).unwrap();
-        let reader = BufReader::new(file);
+        Box::new(BufReader::new(file))
+    };
 
-        search_lines(reader, args);
+    if let Some(ctx) = args.ctx {
+        search_with_context(reader, ctx, args);
+    } else {
+        search_without_context(reader, args);
     }
 }
 
-fn search_lines<T: BufRead>(reader: T, args: Cli) {
-    match args.ctx {
-        Some(ctx) => with_context(reader, ctx, args),
-        None => without_context(reader, args),
-    }
-}
-
-fn without_context<T: BufRead>(reader: T, args: Cli) {
+fn search_without_context<T: BufRead>(reader: T, args: Cli) {
     let re = Regex::new(&args.pattern).unwrap();
 
     for (i, line) in reader.lines().enumerate() {
@@ -68,7 +63,7 @@ fn without_context<T: BufRead>(reader: T, args: Cli) {
     }
 }
 
-fn with_context<T: BufRead>(reader: T, ctx: u8, args: Cli) {
+fn search_with_context<T: BufRead>(reader: T, ctx: u8, args: Cli) {
     let lines = reader.lines().collect::<Result<Vec<_>, _>>().unwrap();
 
     let re = Regex::new(&args.pattern).unwrap();
