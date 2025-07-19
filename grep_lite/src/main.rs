@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 
@@ -16,8 +16,8 @@ struct Cli {
     #[arg(short, value_name = "NUM")]
     ctx: Option<u8>,
     /// Print line number with output lines
-    #[arg(short)]
-    line_number: bool,
+    #[arg(short = 'l')]
+    show_line_number: bool,
     /// PATTERN is regular expression
     #[arg(short)]
     regex: bool,
@@ -54,7 +54,7 @@ fn search_without_context<T: BufRead>(reader: T, args: Cli) {
         };
 
         if is_match {
-            if args.line_number {
+            if args.show_line_number {
                 println!("{}:{}", i + 1, line)
             } else {
                 println!("{}", line)
@@ -64,44 +64,65 @@ fn search_without_context<T: BufRead>(reader: T, args: Cli) {
 }
 
 fn search_with_context<T: BufRead>(reader: T, ctx: u8, args: Cli) {
-    let lines = reader.lines().collect::<Result<Vec<_>, _>>().unwrap();
-
     let re = Regex::new(&args.pattern).unwrap();
+    let mut ctx_buffer = VecDeque::with_capacity(ctx.into());
 
-    let matches: Vec<_> = lines
-        .iter()
-        .enumerate()
-        .filter(|(_, l)| {
-            if args.regex {
-                re.find(l).is_some()
-            } else {
-                l.contains(&args.pattern)
+    let mut after_match = false;
+    let mut print_separator = false;
+    let mut first_match = true;
+
+    for (line_number, line) in reader.lines().enumerate() {
+        let line = line.unwrap();
+
+        let is_match = if args.regex {
+            re.find(&line).is_some()
+        } else {
+            line.contains(&args.pattern)
+        };
+
+        if is_match {
+            if print_separator && !after_match && !first_match {
+                println!("---")
             }
-        })
-        .map(|(i, _)| i)
-        .collect();
 
-    let mut evaluated_line_numbers = HashSet::new();
+            first_match = false;
 
-    for (i, &line_number) in matches.iter().enumerate() {
-        let start = line_number.saturating_sub(ctx.into());
+            print_ctx(&mut ctx_buffer, args.show_line_number);
+            print_line(&line, line_number, args.show_line_number);
 
-        for (j, line) in lines
-            .iter()
-            .enumerate()
-            .skip(start)
-            .take((ctx * 2 + 1).into())
-        {
-            if evaluated_line_numbers.insert(j) {
-                if j == start && i != 0 {
-                    println!("---")
-                }
-                if args.line_number {
-                    println!("{}:{}", j + 1, line)
-                } else {
-                    println!("{}", line)
-                }
+            after_match = true;
+            continue;
+        }
+
+        if ctx_buffer.len() == ctx.into() {
+            if after_match {
+                print_ctx(&mut ctx_buffer, args.show_line_number);
+                after_match = false;
+                print_separator = false;
+            } else {
+                ctx_buffer.pop_front();
+                print_separator = true;
             }
         }
+
+        ctx_buffer.push_back((line_number, line));
+    }
+
+    if after_match {
+        print_ctx(&mut ctx_buffer, args.show_line_number);
+    }
+}
+
+fn print_line(line: &str, line_number: usize, show_line_number: bool) {
+    if show_line_number {
+        println!("{}:{}", line_number + 1, line);
+    } else {
+        println!("{}", line);
+    }
+}
+
+fn print_ctx(ctx_buffer: &mut VecDeque<(usize, String)>, show_line_number: bool) {
+    while let Some((line_number, line)) = ctx_buffer.pop_front() {
+        print_line(&line, line_number, show_line_number);
     }
 }
