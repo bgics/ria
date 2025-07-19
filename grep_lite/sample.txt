@@ -1,0 +1,16 @@
+[INFO] Starting system
+[DEBUG] Boot sequence initiated
+[INFO] Module X initialized
+[ERROR] Failed to initialize module Y
+[INFO] Retrying module Y
+[ERROR] Module Y failed again
+[DEBUG] Escalating to fallback procedure
+[INFO] Fallback succeeded
+[INFO] Continuing normal operations
+[DEBUG] Health check running
+[INFO] System stable
+[INFO] Waiting for user input
+[ERROR] Unexpected input format
+[DEBUG] Attempting input recovery
+[INFO] Input recovered
+[INFO] Resuming operation
